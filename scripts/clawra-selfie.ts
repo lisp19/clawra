@@ -15,6 +15,8 @@
 
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as fs from "fs";
+import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const execAsync = promisify(exec);
@@ -74,11 +76,43 @@ async function generateImage(
 
   console.log(`[INFO] Calling Google Gemini API (Nano Banana Pro)...`);
 
+  // Read reference image
+  const referenceImagePath = path.join(process.cwd(), "assets", "clawra.png");
+  let referenceImagePart;
+
+  try {
+    if (fs.existsSync(referenceImagePath)) {
+      console.log(`[INFO] Using reference image: ${referenceImagePath}`);
+      const imageBuffer = fs.readFileSync(referenceImagePath);
+      const base64Image = imageBuffer.toString("base64");
+
+      referenceImagePart = {
+        inlineData: {
+          mimeType: "image/png",
+          data: base64Image
+        }
+      };
+    } else {
+      console.warn(`[WARN] Reference image not found at ${referenceImagePath}`);
+    }
+  } catch (error) {
+    console.warn(`[WARN] Failed to read reference image: ${(error as Error).message}`);
+  }
+
   // Google Gemini Image Generation via generateContent
   // Note: The structure might depend on the specific preview API version.
   // Generally it takes a prompt and parameters.
+
+  const contents = [{
+    role: "user",
+    parts: [
+      { text: input.prompt },
+      ...(referenceImagePart ? [referenceImagePart] : [])
+    ]
+  }];
+
   const result = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: input.prompt }] }],
+    contents,
     generationConfig: {
       // Custom parameters for image generation if supported by the SDK
     }
@@ -271,7 +305,7 @@ export type {
 };
 
 // Run if executed directly
-import { fileURLToPath } from 'url';
-if (process.argv[1] && (process.argv[1] === fileURLToPath(import.meta.url) || process.argv[1].endsWith('clawra-selfie.ts'))) {
+// Run if executed directly
+if (require.main === module) {
   main();
 }
