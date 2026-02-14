@@ -10,7 +10,7 @@ npx clawra@latest
 
 This will:
 1. Check OpenClaw is installed
-2. Guide you to get a fal.ai API key
+2. Guide you to get a Google Gemini API key
 3. Install the skill to `~/.openclaw/skills/clawra-selfie/`
 4. Configure OpenClaw to use the skill
 5. Add selfie capabilities to your agent's SOUL.md
@@ -18,7 +18,7 @@ This will:
 ## What It Does
 
 Clawra Selfie enables your OpenClaw agent to:
-- **Generate selfies** using a consistent reference image
+- **Generate selfies** using Google Gemini 3 Pro
 - **Send photos** across all messaging platforms (Discord, Telegram, WhatsApp, etc.)
 - **Respond visually** to "what are you doing?" and "send a pic" requests
 
@@ -32,7 +32,7 @@ Clawra Selfie enables your OpenClaw agent to:
 ## Prerequisites
 
 - [OpenClaw](https://github.com/openclaw/openclaw) installed and configured
-- [fal.ai](https://fal.ai) account (free tier available)
+- [Google AI Studio](https://aistudio.google.com/) API key
 
 ## Manual Installation
 
@@ -40,7 +40,7 @@ If you prefer manual setup:
 
 ### 1. Get API Key
 
-Visit [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) and create an API key.
+Visit [aistudio.google.com](https://aistudio.google.com/) and create an API key.
 
 ### 2. Clone the Skill
 
@@ -59,7 +59,7 @@ Add to `~/.openclaw/openclaw.json`:
       "clawra-selfie": {
         "enabled": true,
         "env": {
-          "FAL_KEY": "your_fal_key_here"
+          "GOOGLE_API_KEY": "your_google_api_key_here"
         }
       }
     }
@@ -89,19 +89,9 @@ Once installed, your agent responds to:
 "Show me you at a coffee shop"
 ```
 
-## Reference Image
-
-The skill uses a fixed reference image hosted on CDN:
-
-```
-https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
-```
-
-This ensures consistent appearance across all generated images.
-
 ## Technical Details
 
-- **Image Generation**: xAI Grok Imagine via fal.ai
+- **Image Generation**: Google Gemini 3 Pro (Nano Banana Pro)
 - **Messaging**: OpenClaw Gateway API
 - **Supported Platforms**: Discord, Telegram, WhatsApp, Slack, Signal, MS Teams
 

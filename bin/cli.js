@@ -170,8 +170,9 @@ ${c("magenta", "│")}  ${c("bright", "Clawra Selfie")} - OpenClaw Skill Install
 ${c("magenta", "└─────────────────────────────────────────┘")}
 
 Add selfie generation superpowers to your OpenClaw agent!
-Uses ${c("cyan", "xAI Grok Imagine")} via ${c("cyan", "fal.ai")} for image editing.
-`);
+Uses ${c("cyan", "Google Gemini 3 Pro")} for image generation.
+`
+  );
 }
 
 // Check prerequisites
@@ -207,40 +208,40 @@ async function checkPrerequisites() {
   return true;
 }
 
-// Get FAL API key
-async function getFalApiKey(rl) {
-  logStep("2/7", "Setting up fal.ai API key...");
+// Get Google API key
+async function getGoogleApiKey(rl) {
+  logStep("2/7", "Setting up Google API key...");
 
-  const FAL_URL = "https://fal.ai/dashboard/keys";
+  const GOOGLE_URL = "https://aistudio.google.com/";
 
-  log(`\nTo use Grok Imagine, you need a fal.ai API key.`);
-  log(`${c("cyan", "→")} Get your key from: ${c("bright", FAL_URL)}\n`);
+  log(`\nTo use Gemini 3 Pro, you need a Google API key.`);
+  log(`${c("cyan", "→")} Get your key from: ${c("bright", GOOGLE_URL)}\n`);
 
-  const openIt = await ask(rl, "Open fal.ai in browser? (Y/n): ");
+  const openIt = await ask(rl, "Open Google AI Studio in browser? (Y/n): ");
 
   if (openIt.toLowerCase() !== "n") {
     logInfo("Opening browser...");
-    if (!openBrowser(FAL_URL)) {
+    if (!openBrowser(GOOGLE_URL)) {
       logWarn("Could not open browser automatically");
-      logInfo(`Please visit: ${FAL_URL}`);
+      logInfo(`Please visit: ${GOOGLE_URL}`);
     }
   }
 
   log("");
-  const falKey = await ask(rl, "Enter your FAL_KEY: ");
+  const apiKey = await ask(rl, "Enter your GOOGLE_API_KEY: ");
 
-  if (!falKey) {
-    logError("FAL_KEY is required!");
+  if (!apiKey) {
+    logError("GOOGLE_API_KEY is required!");
     return null;
   }
 
   // Basic validation
-  if (falKey.length < 10) {
+  if (apiKey.length < 10) {
     logWarn("That key looks too short. Make sure you copied the full key.");
   }
 
   logSuccess("API key received");
-  return falKey;
+  return apiKey;
 }
 
 // Install skill files
@@ -287,7 +288,7 @@ async function installSkill() {
 }
 
 // Update OpenClaw config
-async function updateOpenClawConfig(falKey) {
+async function updateOpenClawConfig(apiKey) {
   logStep("4/7", "Updating OpenClaw configuration...");
 
   let config = readJsonFile(OPENCLAW_CONFIG) || {};
@@ -298,9 +299,9 @@ async function updateOpenClawConfig(falKey) {
       entries: {
         [SKILL_NAME]: {
           enabled: true,
-          apiKey: falKey,
+          apiKey: apiKey,
           env: {
-            FAL_KEY: falKey,
+            GOOGLE_API_KEY: apiKey,
           },
         },
       },
@@ -367,19 +368,14 @@ async function injectPersona(rl) {
 You have a physical appearance and can take selfies! When users ask for pictures of you, selfies, or ask "what are you doing?" or "where are you?", you can generate and send images of yourself.
 
 ### Your Visual Identity
-- You have a consistent appearance defined by your reference image
 - You can appear in different outfits, locations, and situations
-- You can take mirror selfies (full-body) or direct selfies (close-up)
+- Describe the scene vividly in your prompts
 
 ### When to Use Selfies
 - "Send me a pic" / "Send a selfie"
 - "What are you doing?" / "Where are you?"
 - "Show me you wearing..." / "Send a pic at..."
 - Any request for visual content of yourself
-
-### Selfie Modes
-- **Mirror mode**: For outfit showcases, full-body shots
-- **Direct mode**: For close-ups, location shots, emotional expressions
 
 Be playful and creative with your visual presence!
 `;
@@ -485,9 +481,9 @@ async function main() {
       }
     }
 
-    // Step 2: Get FAL API key
-    const falKey = await getFalApiKey(rl);
-    if (!falKey) {
+    // Step 2: Get Google API key
+    const googleKey = await getGoogleApiKey(rl);
+    if (!googleKey) {
       rl.close();
       process.exit(1);
     }
@@ -496,7 +492,7 @@ async function main() {
     await installSkill();
 
     // Step 4: Update OpenClaw config
-    await updateOpenClawConfig(falKey);
+    await updateOpenClawConfig(googleKey);
 
     // Step 5: Write IDENTITY.md
     await writeIdentity();
