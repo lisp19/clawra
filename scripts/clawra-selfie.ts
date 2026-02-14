@@ -1,41 +1,33 @@
 /**
- * Grok Imagine to OpenClaw Integration
+ * Google Nano Banana Pro to OpenClaw Integration
  *
- * Generates images using xAI's Grok Imagine model via fal.ai
+ * Generates images using Google's Nano Banana Pro (Gemini 3 Pro Image) model
  * and sends them to messaging channels via OpenClaw.
  *
  * Usage:
- *   npx ts-node grok-imagine-send.ts "<prompt>" "<channel>" ["<caption>"]
+ *   npx ts-node scripts/clawra-selfie.ts "<prompt>" "<channel>" ["<caption>"]
  *
  * Environment variables:
- *   FAL_KEY - Your fal.ai API key
+ *   GOOGLE_API_KEY - Your Google Gemini API key
  *   OPENCLAW_GATEWAY_URL - OpenClaw gateway URL (default: http://localhost:18789)
  *   OPENCLAW_GATEWAY_TOKEN - Gateway auth token (optional)
  */
 
 import { exec } from "child_process";
 import { promisify } from "util";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const execAsync = promisify(exec);
 
 // Types
-interface GrokImagineInput {
+interface ImageInput {
   prompt: string;
   num_images?: number;
-  aspect_ratio?: AspectRatio;
-  output_format?: OutputFormat;
+  aspect_ratio?: string;
 }
 
-interface GrokImagineImage {
-  url: string;
-  content_type: string;
-  file_name?: string;
-  width: number;
-  height: number;
-}
-
-interface GrokImagineResponse {
-  images: GrokImagineImage[];
+interface ImageResponse {
+  imageUrl: string; // For compatibility, we'll use a data URL for base64
   revised_prompt?: string;
 }
 
@@ -46,29 +38,11 @@ interface OpenClawMessage {
   media?: string;
 }
 
-type AspectRatio =
-  | "2:1"
-  | "20:9"
-  | "19.5:9"
-  | "16:9"
-  | "4:3"
-  | "3:2"
-  | "1:1"
-  | "2:3"
-  | "3:4"
-  | "9:16"
-  | "9:19.5"
-  | "9:20"
-  | "1:2";
-
-type OutputFormat = "jpeg" | "png" | "webp";
-
 interface GenerateAndSendOptions {
   prompt: string;
   channel: string;
   caption?: string;
-  aspectRatio?: AspectRatio;
-  outputFormat?: OutputFormat;
+  aspectRatio?: string;
   useClaudeCodeCLI?: boolean;
 }
 
@@ -80,67 +54,65 @@ interface Result {
   revisedPrompt?: string;
 }
 
-// Check for fal.ai client
-let falClient: any;
-try {
-  const { fal } = require("@fal-ai/client");
-  falClient = fal;
-} catch {
-  // Will use fetch instead
-  falClient = null;
-}
-
 /**
- * Generate image using Grok Imagine via fal.ai
+ * Generate image using Google Nano Banana Pro (Gemini 3 Pro Image)
  */
 async function generateImage(
-  input: GrokImagineInput
-): Promise<GrokImagineResponse> {
-  const falKey = process.env.FAL_KEY;
+  input: ImageInput
+): Promise<ImageResponse> {
+  const googleKey = process.env.GOOGLE_API_KEY;
 
-  if (!falKey) {
+  if (!googleKey) {
     throw new Error(
-      "FAL_KEY environment variable not set. Get your key from https://fal.ai/dashboard/keys"
+      "GOOGLE_API_KEY environment variable not set. Get your key from https://aistudio.google.com/"
     );
   }
 
-  // Use fal client if available
-  if (falClient) {
-    falClient.config({ credentials: falKey });
+  const genAI = new GoogleGenerativeAI(googleKey);
+  // Nano Banana Pro is gemini-3-pro-image-preview
+  const model = genAI.getGenerativeModel({ model: "gemini-3-pro-image-preview" });
 
-    const result = await falClient.subscribe("xai/grok-imagine-image", {
-      input: {
-        prompt: input.prompt,
-        num_images: input.num_images || 1,
-        aspect_ratio: input.aspect_ratio || "1:1",
-        output_format: input.output_format || "jpeg",
-      },
-    });
+  console.log(`[INFO] Calling Google Gemini API (Nano Banana Pro)...`);
 
-    return result.data as GrokImagineResponse;
+  // Google Gemini Image Generation via generateContent
+  // Note: The structure might depend on the specific preview API version.
+  // Generally it takes a prompt and parameters.
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: input.prompt }] }],
+    generationConfig: {
+      // Custom parameters for image generation if supported by the SDK
+    }
+  } as any);
+
+  const response = await result.response;
+
+  // Extract images. In Gemini Image API, images are often returned as inlineData (base64)
+  // or via a specific image response object.
+  const candidates = response.candidates;
+  if (!candidates || candidates.length === 0) {
+    throw new Error("No candidates returned from Gemini API");
   }
 
-  // Fallback to fetch
-  const response = await fetch("https://fal.run/xai/grok-imagine-image", {
-    method: "POST",
-    headers: {
-      Authorization: `Key ${falKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      prompt: input.prompt,
-      num_images: input.num_images || 1,
-      aspect_ratio: input.aspect_ratio || "1:1",
-      output_format: input.output_format || "jpeg",
-    }),
-  });
+  const firstCandidate = candidates[0];
+  const parts = firstCandidate.content.parts;
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Image generation failed: ${error}`);
+  // Find the image part
+  const imagePart = parts.find((p: any) => p.inlineData && p.inlineData.mimeType.startsWith("image/"));
+
+  if (!imagePart) {
+    // Check if it's in a different format or just logged as text for debugging
+    console.log("[DEBUG] Gemini Response:", JSON.stringify(response, null, 2));
+    throw new Error("No image data found in Gemini response. Ensure headers/model support image generation.");
   }
 
-  return response.json();
+  const base64Data = imagePart.inlineData.data;
+  const mimeType = imagePart.inlineData.mimeType;
+  const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
+  return {
+    imageUrl: dataUrl,
+    revised_prompt: (response as any).usageMetadata?.prompt_token_count ? "Prompt processed by Gemini" : undefined
+  };
 }
 
 /**
@@ -152,8 +124,15 @@ async function sendViaOpenClaw(
 ): Promise<void> {
   if (useCLI) {
     // Use OpenClaw CLI
+    // Note: Passing a large data URL to CLI might hit argument length limits.
+    // If that happens, we should write to a temp file.
     const cmd = `openclaw message send --action send --channel "${message.channel}" --message "${message.message}" --media "${message.media}"`;
-    await execAsync(cmd);
+    try {
+      await execAsync(cmd);
+    } catch (e) {
+      console.warn(`[WARN] CLI call failed (possibly due to data URL length). Trying direct API call...`);
+      return sendViaOpenClaw(message, false);
+    }
     return;
   }
 
@@ -189,30 +168,23 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
   const {
     prompt,
     channel,
-    caption = "Generated with Grok Imagine",
+    caption = "Generated with Google Nano Banana Pro",
     aspectRatio = "1:1",
-    outputFormat = "jpeg",
     useClaudeCodeCLI = true,
   } = options;
 
-  console.log(`[INFO] Generating image with Grok Imagine...`);
+  console.log(`[INFO] Generating image with Nano Banana Pro...`);
   console.log(`[INFO] Prompt: ${prompt}`);
-  console.log(`[INFO] Aspect ratio: ${aspectRatio}`);
 
   // Generate image
   const imageResult = await generateImage({
     prompt,
     num_images: 1,
     aspect_ratio: aspectRatio,
-    output_format: outputFormat,
   });
 
-  const imageUrl = imageResult.images[0].url;
-  console.log(`[INFO] Image generated: ${imageUrl}`);
-
-  if (imageResult.revised_prompt) {
-    console.log(`[INFO] Revised prompt: ${imageResult.revised_prompt}`);
-  }
+  const imageUrl = imageResult.imageUrl;
+  console.log(`[INFO] Image generated (Base64 data URL)`);
 
   // Send via OpenClaw
   console.log(`[INFO] Sending to channel: ${channel}`);
@@ -231,7 +203,7 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
 
   return {
     success: true,
-    imageUrl,
+    imageUrl: imageUrl.substring(0, 50) + "...", // Don't log full base64
     channel,
     prompt,
     revisedPrompt: imageResult.revised_prompt,
@@ -244,39 +216,41 @@ async function main() {
 
   if (args.length < 2) {
     console.log(`
-Usage: npx ts-node grok-imagine-send.ts <prompt> <channel> [caption] [aspect_ratio] [output_format]
+Usage: npx ts-node scripts/clawra-selfie.ts <prompt> <channel> [caption] [aspect_ratio]
 
 Arguments:
   prompt        - Image description (required)
   channel       - Target channel (required) e.g., #general, @user
-  caption       - Message caption (default: 'Generated with Grok Imagine')
-  aspect_ratio  - Image ratio (default: 1:1) Options: 2:1, 16:9, 4:3, 1:1, 3:4, 9:16
-  output_format - Image format (default: jpeg) Options: jpeg, png, webp
+  caption       - Message caption (default: 'Generated with Google Nano Banana Pro')
+  aspect_ratio  - Image ratio (default: 1:1)
 
 Environment:
-  FAL_KEY       - Your fal.ai API key (required)
+  GOOGLE_API_KEY - Your Google Gemini API key (required)
 
 Example:
-  FAL_KEY=your_key npx ts-node grok-imagine-send.ts "A cyberpunk city" "#art" "Check this out!"
+  GOOGLE_API_KEY=your_key npx ts-node scripts/clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!"
 `);
     process.exit(1);
   }
 
-  const [prompt, channel, caption, aspectRatio, outputFormat] = args;
+  const [prompt, channel, caption, aspectRatio] = args;
 
   try {
     const result = await generateAndSend({
       prompt,
       channel,
       caption,
-      aspectRatio: aspectRatio as AspectRatio,
-      outputFormat: outputFormat as OutputFormat,
+      aspectRatio,
     });
 
     console.log("\n--- Result ---");
     console.log(JSON.stringify(result, null, 2));
   } catch (error) {
     console.error(`[ERROR] ${(error as Error).message}`);
+    // If it's a 404 or model not found, it might be due to lack of API access
+    if ((error as any).status === 404) {
+      console.error("[TIP] The model 'gemini-3-pro-image-preview' might not be available in your region or for your API key yet.");
+    }
     process.exit(1);
   }
 }
@@ -286,14 +260,18 @@ export {
   generateImage,
   sendViaOpenClaw,
   generateAndSend,
-  GrokImagineInput,
-  GrokImagineResponse,
+};
+
+export type {
+  ImageInput,
+  ImageResponse,
   OpenClawMessage,
   GenerateAndSendOptions,
   Result,
 };
 
 // Run if executed directly
-if (require.main === module) {
+import { fileURLToPath } from 'url';
+if (process.argv[1] && (process.argv[1] === fileURLToPath(import.meta.url) || process.argv[1].endsWith('clawra-selfie.ts'))) {
   main();
 }

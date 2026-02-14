@@ -31,3 +31,7 @@ out/
 # OS related files
 .DS_Store
 Thumbs.db
+
+# Test output
+test-output/
+generated-image-*

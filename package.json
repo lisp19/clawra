@@ -40,5 +40,9 @@
     "@types/node": "^22.19.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "undici": "^7.22.0"
   }
 }
